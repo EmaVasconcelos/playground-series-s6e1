@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 
-df = pd.read_csv(r'C:\Users\mafim\Downloads\train.csv')
+df = pd.read_csv('train.csv')
 
 # Paleta de cores
 VERMELHO = "#C0392B"
@@ -114,3 +114,35 @@ ax.set_ylim(15, 112)
 plt.tight_layout()
 plt.savefig('fig4_violin_dificuldade.png', bbox_inches='tight')
 plt.show()
+
+
+
+
+
+# ============================
+# LIMPEZA DE DADOS
+# ============================
+
+# Remover a coluna 'id' por ser irrelevante para a análise (sem valor preditivo)
+df= df.drop(columns=['id'])
+
+#criar coluna classe para a classificacao dos alunos
+def atribuir_classe(score):
+    if score >= 90: return 'A'
+    elif score >= 75: return 'B'
+    elif score >= 60: return 'C'
+    elif score >= 50: return 'D'
+    elif score >= 35: return 'E'
+    else: return 'F'
+
+
+df['classe']=df['exam_score'].apply(atribuir_classe)
+
+#dataset para regressão e clustering
+df_regressao = df.drop(columns=['classe'])
+
+#dataset para classificação
+df_classificacao = df.drop(columns=['exam_score'])
+
+print("DATASET PARA REGRESSÃO E CLUSTERING:", df_regressao.shape)
+print("DATASET PARA CLASSIFICAÇÃO:", df_classificacao.shape)
