@@ -120,7 +120,7 @@ plt.show()
 
 
 # ============================
-# LIMPEZA DE DADOS
+# SELEÇÃO DE DADOS
 # ============================
 
 # Remover a coluna 'id' por ser irrelevante para a análise (sem valor preditivo)
@@ -146,3 +146,156 @@ df_classificacao = df.drop(columns=['exam_score'])
 
 print("DATASET PARA REGRESSÃO E CLUSTERING:", df_regressao.shape)
 print("DATASET PARA CLASSIFICAÇÃO:", df_classificacao.shape)
+
+
+# ============================
+# LIMPEZA DE DADOS
+# ============================
+
+# VALORES EM FALTA
+
+print("=== Valores em falta ===")
+falta = df.isnull().sum()
+falta_percent = ((falta / len(df)) * 100).round(2)
+falta_df = pd.DataFrame({'Valores em falta': falta, 'Percentual (%)': falta_percent})
+print(falta_df)
+
+# Decisão com base nos resultados obtidos
+if falta.sum() == 0:
+    print("\nNão há valores em falta. Não é necessária imputação.")
+
+else:
+    print("\nValores em falta encontrados. Será aplicada imputação.")
+    # Para varivaeis numéricas, usar a mediana para imputação
+    num_cols = df.select_dtypes(include=['number']).columns
+    for col in cols:
+        if df[col].isnull().sum() > 0:
+            mediana = df[col].median()
+            df[col].fillna(mediana, inplace=True)
+            print(f"Imputação da mediana ({mediana}) para a coluna '{col}'.")
+
+    #Para variaveis categóricas, usar a moda para imputação
+    cat_cols = df.select_dtypes(include=['object']).columns
+    for col in cat_cols:
+        if df[col].isnull().sum() > 0:
+            moda = df[col].mode()[0]
+            df[col].fillna(moda, inplace=True)
+            print(f"Imputação da moda ('{moda}') para a coluna '{col}'.")
+
+
+# VALORES DUPLICADOS
+print("\n=== Valores duplicados ===")
+n_dupli=df.duplicated().sum()
+print(f"Registos duplicados encontrados: {n_dupli}")
+
+if n_dupli == 0:
+    print("Não há registos duplicados. Não é necessária a remoção.")
+
+else:
+    df.drop_duplicates(inplace=True)
+    print(f"Registos duplicados removidos. Novo número de registos: {len(df)}")
+
+
+# TIPOS DE DADOS
+print("\n=== Tipos de dados ===")
+print("Tipos de dados antes da correção:")
+print(df.dtypes)
+
+# Variaveis categoricas para string
+cat_cols = ['gender', 'course', 'internet_access', 'sleep_quality', 'facility_rating', 'exam_difficulty', 'study_method']
+
+for col in cat_cols:
+    df[col] = df[col].astype(str)
+    df_regressao[col] = df_regressao[col].astype(str)
+    df_classificacao[col] = df_classificacao[col].astype(str)
+
+
+# VAavariaveis numéricas 
+df['age']=df['age'].astype(int)
+df['study_hours']=df['study_hours'].astype(float)
+df['class_attendance']=df['class_attendance'].astype(float)
+df['sleep_hours']=df['sleep_hours'].astype(float)
+df['exam_score']=df['exam_score'].astype(float)
+
+print("\nTipos de dados após correção:")
+print(df.dtypes)
+
+
+
+# VALIDAÇÃO DOS INTERVALOS DE VALORES
+print("\n=== Validação dos intervalos de valores ===")
+
+#Definir intervalos válidos para cada variável numérica
+intervalos = {
+    'age': (17, 24),
+    'study_hours': (0, 8),
+    'class_attendance': (0, 100),
+    'sleep_hours': (0, 12),
+    'exam_score': (0, 100)
+}
+
+
+for col, (minimo, maximo) in intervalos.items():
+    invalidos = df[(df[col] < minimo) | (df[col] > maximo)]
+    if len(invalidos) == 0:
+       print(f"Todos os valores da coluna '{col}' estão dentro do intervalo válido ({minimo} a {maximo}).")
+    else:
+        print(f"Valores inválidos encontrados na coluna '{col}':")
+        print(invalidos[[col]])
+        #Decisão: remover os registos com valores inválidos
+        df.drop(invalidos.index, inplace=True)
+        print(f"Registos com valores inválidos removidos. Novo número de registos: {len(df)}")
+         
+
+#verificar categorias inesperadas nas variáveis categóricas
+print("\n=== Verificação de categorias inesperadas ===")
+
+categorias_esperadas = {
+    'gender': ['male','female','other'],
+    'internet_access': ['yes','no'],
+    'sleep_quality': ['poor','average','good'],
+    'facility_rating': ['low','medium','high'],
+    'exam_difficulty': ['easy','moderate','hard'],
+    'study_method': ['self-study','group study','tutoring','online videos','coaching', 'mixed']
+
+}
+
+
+for col, esperadas in categorias_esperadas.items():
+    encontradas = df[col].unique().tolist()
+    inesperadas = [v for v in encontradas if v not in esperadas]
+    if not inesperadas:
+        print(f"Todas as categorias da coluna '{col}' são esperadas.")
+    else:
+        print(f"Categorias inesperadas encontradas na coluna '{col}': {inesperadas}")
+        #Decisão: remover os registos com categorias inesperadas
+        df = df[~df[col].isin(inesperadas)]
+        print(f"Registos com categorias inesperadas removidos. Novo número de registos: {len(df)}")
+
+
+
+# OUTLIERS
+print("\n=== Análise de Outliers (IQR) ===")
+
+num_cols = ['age', 'study_hours', 'class_attendance', 'sleep_hours', 'exam_score']
+
+for col in num_cols:
+    Q1 = df[col].quantile(0.25)
+    Q3 = df[col].quantile(0.75)
+    IQR = Q3 - Q1
+    lower= Q1 -1.5*IQR
+    upper= Q3 + 1.5*IQR
+    outliers = df[(df[col] < lower) | (df[col] > upper)]
+    print(f"{col}:{len(outliers)} outliers (limite inferior: {lower:.2f}, limite superior: {upper:.2f})")
+
+n_outliers = sum(
+    len(df[(df[col] < df[col].quantile(0.25) - 1.5 * (df[col].quantile(0.75) - df[col].quantile(0.25))) |
+           (df[col] > df[col].quantile(0.75) + 1.5 * (df[col].quantile(0.75) - df[col].quantile(0.25)))])
+    for col in num_cols
+)
+
+
+if n_outliers == 0:
+    print("Não foram encontrados outliers pelo método IQR. O dataset não requer tratamento de outliers.")
+else:
+    print("Decisão: Manter os outliers identificados, pois representam alunos com comportamentos extremos reais. São exatamente esstes casos que pretendemos detectar.")
