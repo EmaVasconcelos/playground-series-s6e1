@@ -123,9 +123,6 @@ plt.show()
 # SELEÇÃO DE DADOS
 # ============================
 
-# Remover a coluna 'id' por ser irrelevante para a análise (sem valor preditivo)
-df= df.drop(columns=['id'])
-
 #criar coluna classe para a classificacao dos alunos
 def atribuir_classe(score):
     if score >= 90: return 'A'
