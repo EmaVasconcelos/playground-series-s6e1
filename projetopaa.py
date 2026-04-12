@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
+from sklearn.preprocessing import LabelEncoder
 
 df = pd.read_csv('train.csv')
 
@@ -296,3 +297,46 @@ if n_outliers == 0:
     print("Não foram encontrados outliers pelo método IQR. O dataset não requer tratamento de outliers.")
 else:
     print("Decisão: Manter os outliers identificados, pois representam alunos com comportamentos extremos reais. São exatamente esstes casos que pretendemos detectar.")
+
+df_regressao.to_csv('df_regressao_limpo.csv', index=False)
+df_classificacao.to_csv('df_classificacao_limpo.csv', index=False)
+print("\nFicheiros guardados com sucesso!")
+
+# ============================
+# ENCODING
+# ============================
+
+df_reg = pd.read_csv('df_regressao_limpo.csv')
+df_clas = pd.read_csv('df_classificacao_limpo.csv')
+
+# ── LABEL ENCODING (variáveis ordinais) ───────────────────────
+
+# Mapeamentos com ordem lógica
+sleep_map      = {'poor': 0, 'average': 1, 'good': 2}
+facility_map   = {'low': 0, 'medium': 1, 'high': 2}
+difficulty_map = {'easy': 0, 'moderate': 1, 'hard': 2}
+internet_map   = {'no': 0, 'yes': 1}
+
+for df in [df_reg, df_clas]:
+    df['sleep_quality']   = df['sleep_quality'].map(sleep_map)
+    df['facility_rating'] = df['facility_rating'].map(facility_map)
+    df['exam_difficulty'] = df['exam_difficulty'].map(difficulty_map)
+    df['internet_access'] = df['internet_access'].map(internet_map)
+
+print("Label Encoding aplicado!")
+
+# ── ONE-HOT ENCODING (variáveis nominais) ─────────────────────
+
+nominal_cols = ['gender', 'course', 'study_method']
+
+df_reg = pd.get_dummies(df_reg, columns=nominal_cols, drop_first=True, dtype=int)
+df_clas = pd.get_dummies(df_clas, columns=nominal_cols, drop_first=True, dtype=int)
+
+print("One-Hot Encoding aplicado!")
+print(f"Colunas após encoding (regressão): {df_reg.shape[1]}")
+print(f"Colunas após encoding (classificação): {df_clas.shape[1]}")
+
+# (opcional) Guardar datasets codificados em ficheiros CSV
+df_reg.to_csv('df_regressao_encoded.csv', index=False)
+df_clas.to_csv('df_classificacao_encoded.csv', index=False)
+print("Datasets codificados foram guardados com sucesso.")
