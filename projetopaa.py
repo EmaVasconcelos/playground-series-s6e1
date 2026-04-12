@@ -309,9 +309,8 @@ print("\nFicheiros guardados com sucesso!")
 df_reg = pd.read_csv('df_regressao_limpo.csv')
 df_clas = pd.read_csv('df_classificacao_limpo.csv')
 
-# ── LABEL ENCODING (variáveis ordinais) ───────────────────────
+# LABEL ENCODING (variáveis ordinais)
 
-# Mapeamentos com ordem lógica
 sleep_map      = {'poor': 0, 'average': 1, 'good': 2}
 facility_map   = {'low': 0, 'medium': 1, 'high': 2}
 difficulty_map = {'easy': 0, 'moderate': 1, 'hard': 2}
@@ -325,7 +324,7 @@ for df in [df_reg, df_clas]:
 
 print("Label Encoding aplicado!")
 
-# ── ONE-HOT ENCODING (variáveis nominais) ─────────────────────
+# ONE-HOT ENCODING (variáveis nominais) 
 
 nominal_cols = ['gender', 'course', 'study_method']
 
@@ -336,7 +335,6 @@ print("One-Hot Encoding aplicado!")
 print(f"Colunas após encoding (regressão): {df_reg.shape[1]}")
 print(f"Colunas após encoding (classificação): {df_clas.shape[1]}")
 
-# (opcional) Guardar datasets codificados em ficheiros CSV
 df_reg.to_csv('df_regressao_encoded.csv', index=False)
 df_clas.to_csv('df_classificacao_encoded.csv', index=False)
 print("Datasets codificados foram guardados com sucesso.")
