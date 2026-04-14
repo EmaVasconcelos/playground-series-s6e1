@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+import pickle
 
 df = pd.read_csv('train.csv')
 
@@ -338,3 +340,37 @@ print(f"Colunas após encoding (classificação): {df_clas.shape[1]}")
 df_reg.to_csv('df_regressao_encoded.csv', index=False)
 df_clas.to_csv('df_classificacao_encoded.csv', index=False)
 print("Datasets codificados foram guardados com sucesso.")
+
+# ============================
+# NORMALIZAÇÃO
+# ============================
+
+num_cols = ['age', 'study_hours', 'class_attendance', 'sleep_hours']
+
+minmax = MinMaxScaler()
+df_reg_minmax = df_reg.copy()
+df_clas_minmax = df_clas.copy()
+
+minmax.fit(df_reg[num_cols])
+
+df_reg_minmax[num_cols] = minmax.transform(df_reg[num_cols])
+df_clas_minmax[num_cols] = minmax.transform(df_clas[num_cols])
+
+# StandardScaler (para regressão linear)
+
+scaler = StandardScaler()
+df_reg_standard = df_reg.copy()
+scaler.fit(df_reg[num_cols])
+df_reg_standard[num_cols] = scaler.transform(df_reg[num_cols])
+
+print("Normalização aplicada!")
+
+with open('minmax_scaler.pkl', 'wb') as f:
+    pickle.dump(minmax, f)
+with open('standard_scaler.pkl', 'wb') as f:
+    pickle.dump(scaler, f)
+
+df_reg_minmax.to_csv('df_regressao_minmax.csv', index=False)
+df_clas_minmax.to_csv('df_classificacao_minmax.csv', index=False)
+df_reg_standard.to_csv('df_regressao_standard.csv', index=False)
+print("\nFicheiros guardados com sucesso!")
