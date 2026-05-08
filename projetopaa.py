@@ -374,3 +374,78 @@ df_reg_minmax.to_csv('df_regressao_minmax.csv', index=False)
 df_clas_minmax.to_csv('df_classificacao_minmax.csv', index=False)
 df_reg_standard.to_csv('df_regressao_standard.csv', index=False)
 print("\nFicheiros guardados com sucesso!")
+
+# ============================
+# FEATURE ENGINEERING
+# ============================
+
+SEED = 42
+
+df_regressao = pd.read_csv("df_regressao_minmax.csv")
+df_classificacao = pd.read_csv("df_classificacao_minmax.csv") 
+
+for df in [df_regressao, df_classificacao]:
+    df["estudo_assiduidade"] = df["study_hours"] * df["class_attendance"]
+    
+    df["sono_estudo"] = df["sleep_hours"] * df["study_hours"]
+    
+    limiar_estudo = df["study_hours"].quantile(0.25)
+    limiar_assiduidade = df["class_attendance"].quantile(0.25)
+    
+    df["perfil_risco"] = (
+        (df["study_hours"] < limiar_estudo) &
+        (df["class_attendance"] < limiar_assiduidade)
+    ).astype(int)
+
+print("Feature Engineering aplicado!")
+
+# ============================
+# DIVISÃO TREINO/TESTE
+# ============================
+
+# Regressão
+X_reg = df_regressao.drop(columns=["exam_score", "id"])
+y_reg = df_regressao["exam_score"]
+
+X_reg_train, X_reg_test, y_reg_train, y_reg_test = train_test_split(
+    X_reg, y_reg, test_size=0.2, random_state=SEED
+)
+
+# Classificação
+X_clf = df_classificacao.drop(columns=["classe", "id"])
+y_clf = df_classificacao["classe"]
+
+X_clf_train, X_clf_test, y_clf_train, y_clf_test = train_test_split(
+    X_clf, y_clf, test_size=0.2, random_state=SEED, stratify=y_clf
+)
+
+print(f"\n=== DIVISÃO DOS DADOS ===")
+print(f"Regressão    — Treino: {X_reg_train.shape} | Teste: {X_reg_test.shape}")
+print(f"Classificação — Treino: {X_clf_train.shape} | Teste: {X_clf_test.shape}")
+print(f"\nDistribuição de classes no treino:\n{y_clf_train.value_counts().sort_index()}")
+print(f"\nDistribuição de classes no teste:\n{y_clf_test.value_counts().sort_index()}")
+
+# ============================
+# VALIDAÇÃO CRUZADA — K-FOLD (k=5)
+# ============================
+
+# Classificação — KFold 
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
+
+# Regressão — KFold 
+kf = KFold(n_splits=5, shuffle=True, random_state=SEED)
+
+print(f"\n=== VALIDAÇÃO CRUZADA ===")
+print(f"Stratified K-Fold (k=5) definido para classificação")
+print(f"K-Fold (k=5) definido para regressão")
+
+# ============================
+# SMOTE
+# ============================
+
+smote = SMOTE(random_state=SEED)
+X_clf_train_bal, y_clf_train_bal = smote.fit_resample(X_clf_train, y_clf_train)
+
+print(f"\n=== SMOTE APLICADO ===")
+print(f"Antes  — {y_clf_train.value_counts().sort_index().to_dict()}")
+print(f"Depois — {pd.Series(y_clf_train_bal).value_counts().sort_index().to_dict()}")
