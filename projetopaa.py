@@ -374,3 +374,5 @@ df_reg_minmax.to_csv('df_regressao_minmax.csv', index=False)
 df_clas_minmax.to_csv('df_classificacao_minmax.csv', index=False)
 df_reg_standard.to_csv('df_regressao_standard.csv', index=False)
 print("\nFicheiros guardados com sucesso!")
+
+
