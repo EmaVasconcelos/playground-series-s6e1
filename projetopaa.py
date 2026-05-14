@@ -402,6 +402,8 @@ print("Feature Engineering aplicado!")
 # ============================
 # DIVISÃO TREINO/TESTE
 # ============================
+from sklearn.model_selection import train_test_split, StratifiedKFold, KFold
+from imblearn.over_sampling import SMOTE
 
 # Regressão
 X_reg = df_regressao.drop(columns=["exam_score", "id"])
@@ -451,3 +453,228 @@ print(f"Antes  — {y_clf_train.value_counts().sort_index().to_dict()}")
 print(f"Depois — {pd.Series(y_clf_train_bal).value_counts().sort_index().to_dict()}")
 
 
+# ============================
+# bibliotecas para classificação
+# ============================
+
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
+
+from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.metrics import silhouette_score
+
+from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score, classification_report, confusion_matrix)
+
+from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import LabelEncoder
+
+SEED = 42
+
+#contruir modelos classificacao
+
+le=LabelEncoder()
+y_clf_train_enc = le.fit_transform(y_clf_train_bal)
+y_clf_test_enc = le.transform(y_clf_test)
+
+#arvores de decisao
+dt= DecisionTreeClassifier(
+    max_depth=10,
+    min_samples_leaf=50,
+    class_weight= 'balanced',
+    random_state=SEED
+)
+dt.fit(X_clf_train_bal,y_clf_train_bal)
+print('Arvore de decisao treinada.')
+
+#random forest
+rf_clf= RandomForestClassifier(
+    n_estimators=100,
+    max_depth=15,
+    class_weight='balanced',
+    random_state= SEED,
+    n_jobs=1
+)
+rf_clf.fit(X_clf_train_bal,y_clf_train_bal)
+print('random forest treinado.')
+
+#XGBoost
+xgb_clf= XGBClassifier(
+    n_estimators=200,
+    max_depth=6,
+    learning_rate= 0.1,
+    eval_metric='mlogloss',
+    random_state=SEED,
+    n_jobs=1
+)
+xgb_clf.fit(X_clf_train_bal,y_clf_train_enc)
+print('XGBoost treinado.')
+
+#Ajuste dos hiperparametros
+print('grid search-Random Forest')
+param_grid={
+    'n_estimators':[100,200],
+    'max_depth':[10,15,20],
+    'min_samples_leaf':[20,50]
+}
+
+
+grid_rf= GridSearchCV(
+    RandomForestClassifier(class_weight='balanced',random_state=SEED,n_jobs=1),param_grid,cv=3,scoring='f1_macro',n_jobs=-1,verbose=1
+)
+grid_rf.fit(X_clf_train_bal,y_clf_train_bal)
+print(f"Melhores parametros: {grid_rf.best_params_}")
+print(f"Melhores F1-macro: {grid_rf.best_score_:.4f}")
+
+rf_clf_otimizado=grid_rf.best_estimator_
+
+# =============================
+# AVALIACAO
+# =============================
+
+def avaliar_classificacao(modelo, X_test,y_test, nome, encoded= False):
+    y_pred=modelo.predict(X_test)
+    if encoded:
+        y_pred=le.inverse_transform(y_pred)
+
+    print(f"\n{'='*50}")
+    print(f" MODELO:{nome}")
+    print(classification_report(y_test,y_pred, target_names=['A','B','C','D','E','F']))
+
+    accuracy= accuracy_score(y_test,y_pred)
+    rec_macro=recall_score(y_test,y_pred,average='macro')
+    rec_F= recall_score(y_test,y_pred,labels=['F'],average='macro')
+    prec=precision_score(y_test,y_pred,average='macro')
+    f1= f1_score(y_test, y_pred, average='macro')
+
+
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Recall (Macro): {rec_macro:.4f}")
+    print(f"Recall (F): {rec_F:.4f}") #mais importante para o nosso objetivo
+    print(f"Precision (Macro): {prec:.4f}")
+    print(f"F1-Score (Macro): {f1:.4f}")
+
+    return {'Modelo':nome, 'Accuracy': round(accuracy,4), 'Recall_Macro': round(rec_macro,4), 'Recall_F': round(rec_F,4), 'Precision_Macro': round(prec,4), 'F1_Macro': round(f1,4)}
+
+resultados_clf=[]
+for modelo, nome, enc in[
+    (dt, 'Árvore de Decisão', False),
+    (rf_clf, 'Random Forest', False),
+    (xgb_clf, 'XGBoost', True)
+]:
+    resultados_clf.append(avaliar_classificacao(modelo, X_clf_test, y_clf_test, nome, encoded=enc))
+
+#Tabela comparativa dos resultados
+df_resultados_clf = pd.DataFrame(resultados_clf).sort_values(by='Recall_F', ascending=False)
+print("\n=== Tabela Comparativa dos Modelos de Classificação ===")
+print(df_resultados_clf.to_string(index=False))
+print(f"\n Melhor modelo: {df_resultados_clf.iloc[0]['Modelo']}")
+
+#matriz de confusão do melhor modelo
+nomes_modelos = ['Árvore de Decisão', 'Random Forest', 'XGBoost']
+objetos_modelos= [dt,rf_clf_otimizado,xgb_clf]
+melhor_nome = df_resultados_clf.iloc[0]['Modelo']
+melhor_clf= objetos_modelos[nomes_modelos.index(melhor_nome)]
+
+y_pred_melhor = melhor_clf.predict(X_clf_test)
+if melhor_nome == 'XGBoost':
+    y_pred_melhor = le.inverse_transform(y_pred_melhor)
+
+fig, ax = plt.subplots(figsize=(8,6))
+cm=confusion_matrix(y_clf_test, y_pred_melhor, 
+                    labels=['A','B','C','D','E','F'])
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['A','B','C','D','E','F'], yticklabels=['A','B','C','D','E','F'], ax=ax)
+ax.set_title(f'Matriz de Confusão - {melhor_nome}', fontsize=14, fontweight='bold')
+ax.set_xlabel('Classe Prevista')
+ax.set_ylabel('Classe Real')
+plt.tight_layout()
+plt.savefig('confusion_matrix.png', bbox_inches='tight', dpi=150)
+plt.show()
+
+
+
+# ============================
+# CLUSTERING
+# ============================
+df_regressao     = pd.read_csv('df_regressao_minmax.csv')
+X_clust = df_regressao.drop(columns=['exam_score', 'id'])
+sample= X_clust.sample(10000, random_state=SEED)
+
+inertias=[]
+silhouettes=[]
+k_range= range(2,9)
+
+for k in k_range:
+    km=KMeans(n_clusters=k, random_state=SEED, n_init=10)
+    labels=km.fit_predict(sample)
+    inertias.append(km.inertia_)
+    silhouettes.append(silhouette_score(sample,labels))
+    print(f"k={k} -Inércia: {km.inertia_:,.2f} | Silhouette: {silhouettes[-1]:.4f}")
+
+#Grafico do joelho + silhouette
+fig,axes = plt.subplots(1,2, figsize=(14,5))
+
+axes[0].plot(k_range, inertias, 'o-', color='#2E75B6', linewidth=2, markersize=8)
+axes[0].set_title('Método do Joelho — Inércia', fontsize=14, fontweight='bold')
+axes[0].set_xlabel('Número de Clusters (k)')
+axes[0].set_ylabel('Inércia (WCSS)')
+axes[0].set_facecolor('#F8F8F8')
+
+axes[1].plot(k_range, silhouettes, 'o-', color='#70AD47', linewidth=2, markersize=8)
+axes[1].set_title('Silhouette Score por k', fontsize=14, fontweight='bold')
+axes[1].set_xlabel('Número de Clusters (k)')
+axes[1].set_ylabel('Silhouette Score')
+axes[1].set_facecolor('#F8F8F8')
+
+plt.tight_layout()
+plt.savefig('joelho_silhouette.png', dpi=150, bbox_inches='tight')
+plt.show()
+
+# decisao do k otimo
+k_otimo_sil=list(k_range)[silhouettes.index(max(silhouettes))]
+diffs=np.diff(inertias)
+k_otimo_joelho=list(k_range)[np.argmin(np.diff(diffs))+1]
+
+print(f"\nMétodo do Joelho sugere: k = {k_otimo_joelho}")
+print(f"Silhouette Score sugere: k = {k_otimo_sil}")
+k_otimo = 4  # justificado por critérios de negócio
+print("k=4 escolhido — 4 perfis de aluno acionáveis para o sistema SmartAlert")
+
+# ==============================
+# Construir modelos clustering
+# ==============================
+
+kmeans= KMeans(n_clusters= k_otimo, random_state= SEED, n_init=10)
+clusters_kmeans=kmeans.fit_predict(X_clust)
+sil_kmeans=silhouette_score(sample, kmeans.predict(sample))
+print(f"\nK-Means — Silhouette Score: {sil_kmeans:.4f}")
+
+
+#Hierarchical
+sample_idx=X_clust.sample(5000, random_state=SEED).index
+hc=AgglomerativeClustering(n_clusters=k_otimo)
+clusters_hc=hc.fit_predict(X_clust.loc[sample_idx])
+sil_hc=silhouette_score(X_clust.loc[sample_idx],clusters_hc)
+print(f"Hierarchical  — Silhouette Score: {sil_hc:.4f}")
+
+print(f"\nMelhor método de clustering: "f"{'K-Means' if sil_kmeans >= sil_hc else 'Hierarchical'}")
+
+#perfil medio por cluster
+df_clust=X_clust.copy()
+df_clust['cluster']=clusters_kmeans
+df_clust['exam_score']=df_regressao['exam_score']
+
+print("\n=== PERFIL MÉDIO POR CLUSTER ===")
+perfil = df_clust.groupby('cluster')[['study_hours','class_attendance','sleep_hours','exam_score']].mean().round(3)
+print(perfil)
+
+with open('modelo_dt.pkl', 'wb') as f:
+    pickle.dump(dt, f)
+with open('modelo_rf_clf.pkl', 'wb') as f:
+    pickle.dump(rf_clf_otimizado, f)
+with open('modelo_xgb_clf.pkl', 'wb') as f:
+    pickle.dump(xgb_clf, f)
+with open('modelo_kmeans.pkl', 'wb') as f:
+    pickle.dump(kmeans, f)
+with open('label_encoder.pkl', 'wb') as f:
+    pickle.dump(le, f)
