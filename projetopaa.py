@@ -649,6 +649,45 @@ clusters_kmeans=kmeans.fit_predict(X_clust)
 sil_kmeans=silhouette_score(sample, kmeans.predict(sample))
 print(f"\nK-Means — Silhouette Score: {sil_kmeans:.4f}")
 
+# ============================
+# PCA + K-MEANS
+# ============================
+
+from sklearn.decomposition import PCA
+
+pca = PCA(n_components=2, random_state=SEED)
+X_clust_pca = pca.fit_transform(X_clust)
+
+print(f"\nVariância explicada pelos 2 componentes: {pca.explained_variance_ratio_.sum()*100:.1f}%")
+
+# K-Means sem PCA
+kmeans = KMeans(n_clusters=k_otimo, random_state=SEED, n_init=10)
+clusters_kmeans = kmeans.fit_predict(X_clust)
+sil_kmeans = silhouette_score(sample, kmeans.predict(sample))
+print(f"K-Means sem PCA — Silhouette Score: {sil_kmeans:.4f}")
+
+# K-Means com PCA
+kmeans_pca = KMeans(n_clusters=k_otimo, random_state=SEED, n_init=10)
+clusters_pca = kmeans_pca.fit_predict(X_clust_pca)
+sil_pca = silhouette_score(X_clust_pca, clusters_pca)
+print(f"K-Means com PCA — Silhouette Score: {sil_pca:.4f}")
+
+# Visualização 2D dos clusters com PCA
+fig, ax = plt.subplots(figsize=(9, 6))
+cores = ['#2E75B6', '#70AD47', '#ED7D31', '#C00000']
+sample_vis = np.random.choice(len(clusters_pca), 10000, replace=False)
+for i in range(k_otimo):
+    mask = clusters_pca[sample_vis] == i
+    ax.scatter(X_clust_pca[sample_vis][mask, 0],
+               X_clust_pca[sample_vis][mask, 1],
+               s=5, alpha=0.4, color=cores[i], label=f'Cluster {i}')
+ax.set_title('Clusters com PCA (2 Componentes Principais)', fontweight='bold', fontsize=14)
+ax.set_xlabel('Componente Principal 1')
+ax.set_ylabel('Componente Principal 2')
+ax.legend()
+plt.tight_layout()
+plt.savefig('clusters_pca.png', dpi=150, bbox_inches='tight')
+plt.show()
 
 #Hierarchical
 sample_idx=X_clust.sample(5000, random_state=SEED).index
