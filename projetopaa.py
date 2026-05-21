@@ -6,6 +6,16 @@ from matplotlib.colors import LinearSegmentedColormap
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import pickle
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor, XGBClassifier
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import (mean_absolute_error, mean_squared_error, r2_score,
+                              accuracy_score, recall_score, precision_score,
+                              f1_score, classification_report, confusion_matrix)
+
 
 df = pd.read_csv('train.csv')
 
@@ -717,3 +727,171 @@ with open('modelo_kmeans.pkl', 'wb') as f:
     pickle.dump(kmeans, f)
 with open('label_encoder.pkl', 'wb') as f:
     pickle.dump(le, f)
+
+#============================  
+# Regressão Linear 
+#============================
+
+lr = LinearRegression()
+lr.fit(X_reg_train, y_reg_train)
+
+#============================
+# Random Forest Regressor
+#============================
+
+rf_reg = RandomForestRegressor(
+    n_estimators=100,
+    max_depth=15,
+    random_state=SEED,
+    n_jobs=-1
+)
+rf_reg.fit(X_reg_train, y_reg_train)
+
+#============================
+# XGBoost Regressor
+#============================
+
+xgb_reg = XGBRegressor(
+    n_estimators=200,
+    max_depth=6,
+    learning_rate=0.1,
+    random_state=SEED,
+    n_jobs=-1
+)
+xgb_reg.fit(X_reg_train, y_reg_train)
+
+#============================
+# MÉTRICAS DE REGRESSÃO 
+#============================
+
+def avaliar_regressao(modelo, X_test, y_test, nome):
+    y_pred = modelo.predict(X_test)
+    y_mean = np.mean(y_test)
+    mae  = mean_absolute_error(y_test, y_pred)
+    mse  = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    r2   = r2_score(y_test, y_pred)
+    rae  = np.sum(np.abs(y_test-y_pred)) / np.sum(np.abs(y_test-y_mean)) * 100
+    nmae = mae / (y_test.max()-y_test.min()) * 100
+    rse  = np.sum((y_test-y_pred)**2) / np.sum((y_test-y_mean)**2) * 100
+    rrse = np.sqrt(rse)
+    print(f"\n{'='*45}\n  {nome}\n{'='*45}")
+    print(f"MAE:   {mae:.4f}  |  RAE:  {rae:.2f}%  |  NMAE: {nmae:.2f}%")
+    print(f"MSE:   {mse:.4f}  |  RMSE: {rmse:.4f}")
+    print(f"RSE:   {rse:.2f}%  |  RRSE: {rrse:.2f}%")
+    print(f"R²:    {r2:.4f}  <- quanto maior melhor (máx. 1)")
+    return {'Modelo':nome,'MAE':round(mae,4),'RMSE':round(rmse,4),
+            'RAE%':round(rae,2),'R2':round(r2,4)}
+
+resultados_reg = []
+for modelo, nome in [(lr,'Regressão Linear'),
+                     (rf_reg,'Random Forest'),
+                     (xgb_reg,'XGBoost')]:
+    resultados_reg.append(avaliar_regressao(modelo, X_reg_test, y_reg_test, nome))
+
+# Tabela comparativa
+df_reg = pd.DataFrame(resultados_reg).sort_values('RMSE')
+print("\n=== MELHOR MODELO DE REGRESSÃO ===")
+print(df_reg.to_string(index=False))
+print(f"\n Melhor: {df_reg.iloc[0]['Modelo']}")
+
+#============================
+# MÉTRICAS DE CLASSIFICAÇÃO
+#============================
+
+def avaliar_classificacao(modelo, X_test, y_test, nome, encoded=False):
+    y_pred = modelo.predict(X_test)
+    if encoded:
+        y_pred = le.inverse_transform(y_pred)
+    print(f"\n{'='*45}\n  {nome}\n{'='*45}")
+    print(classification_report(y_test, y_pred,
+          target_names=['A','B','C','D','E','F']))
+    acc    = accuracy_score(y_test, y_pred)
+    recall_F = recall_score(y_test, y_pred, labels=['F'], average='macro')
+    f1     = f1_score(y_test, y_pred, average='macro')
+    return {'Modelo':nome,'Accuracy':round(acc,4),
+            'Recall_F':round(recall_F,4),'F1_macro':round(f1,4)}
+
+resultados_clf = []
+for modelo, nome, enc in [
+    (dt,              'Árvore de Decisão', False),
+    (rf_clf_otimizado,'Random Forest',     False),
+    (xgb_clf,         'XGBoost',           True)]:
+    resultados_clf.append(avaliar_classificacao(modelo, X_clf_test,
+                           y_clf_test, nome, enc))
+
+df_clf = pd.DataFrame(resultados_clf).sort_values('Recall_F', ascending=False)
+print("\n=== MELHOR MODELO DE CLASSIFICAÇÃO ===")
+print(df_clf.to_string(index=False))
+print(f"\n Melhor: {df_clf.iloc[0]['Modelo']}")
+
+#============================
+# GRÁFICO RSC (Regression Scatter Plot) 
+#============================
+import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+def plot_rsc(modelo, X_test, y_test, nome):
+    y_pred = modelo.predict(X_test)
+    fig, ax = plt.subplots(figsize=(7, 6))
+    ax.scatter(y_test, y_pred, alpha=0.2, s=5, color='#2E75B6')
+    lim = [min(y_test.min(), y_pred.min()), max(y_test.max(), y_pred.max())]
+    ax.plot(lim, lim, 'r--', linewidth=2, label='Previsão Perfeita')
+    ax.set_xlabel('Valores Reais'); ax.set_ylabel('Valores Previstos')
+    ax.set_title(f'RSC — {nome}', fontweight='bold')
+    ax.legend(); plt.tight_layout()
+    plt.savefig(f'rsc_{nome}.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Guardado: rsc_{nome}.png")
+
+#============================
+# CURVA REC (Regression Error Characteristic) 
+#============================
+
+def plot_rec(modelos_dict, X_test, y_test):
+    fig, ax = plt.subplots(figsize=(9, 6))
+    colors = ['#2E75B6','#70AD47','#C00000']
+    for (nome, modelo), cor in zip(modelos_dict.items(), colors):
+        y_pred = modelo.predict(X_test)
+        erros  = np.abs(y_test - y_pred)
+        tols   = np.linspace(0, erros.max(), 300)
+        taxas  = [np.mean(erros <= t) for t in tols]
+        auc    = np.trapezoid(taxas, tols) / tols[-1]
+        ax.plot(tols, taxas, color=cor, linewidth=2,
+                label=f'{nome} (AUC={auc:.3f})')
+    ax.set_xlabel('Tolerância ao Erro'); ax.set_ylabel('Taxa de Acerto')
+    ax.set_title('Curva REC — Comparação de Modelos', fontweight='bold')
+    ax.legend(); ax.set_facecolor('#F8F8F8'); plt.tight_layout()
+    plt.savefig('rec_comparacao.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print("Guardado: rec_comparacao.png")
+
+# RSC para cada modelo individualmente
+for modelo, nome in [(lr, 'Regressão Linear'),
+                     (rf_reg, 'Random Forest'),
+                     (xgb_reg, 'XGBoost')]:
+    plot_rsc(modelo, X_reg_test, y_reg_test, nome)
+
+# REC com todos os modelos juntos
+modelos_dict = {
+    'Regressão Linear': lr,
+    'Random Forest':    rf_reg,
+    'XGBoost':          xgb_reg
+}
+plot_rec(modelos_dict, X_reg_test, y_reg_test)
+
+#============================
+# REVISÃO DOS PARÂMETROS USADOS 
+#============================
+
+print("\n=== REVISÃO DOS PARÂMETROS USADOS ===")
+modelos_params = {
+    'Regressão Linear':   lr.get_params(),
+    'Random Forest Reg':  rf_reg.get_params(),
+    'XGBoost Reg':        xgb_reg.get_params(),
+    'Árvore de Decisão':  dt.get_params(),
+    'Random Forest Clf':  rf_clf_otimizado.get_params(),
+    'XGBoost Clf':        xgb_clf.get_params(),
+}
+for nome, params in modelos_params.items():
+    print(f"\n{nome}: {params}")
