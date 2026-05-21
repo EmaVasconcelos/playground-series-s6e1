@@ -602,6 +602,43 @@ plt.savefig('confusion_matrix.png', bbox_inches='tight', dpi=150)
 plt.show()
 
 
+# ===========================
+# Impacto de negocio
+# ===========================
+y_pred_dt = dt.predict(X_clf_test)
+y_pred_rf = pd.Series(rf_clf_otimizado.predict(X_clf_test), index=X_clf_test.index)
+
+alunos_F_reais = (y_clf_test == 'F').sum()
+alunos_F_detetados = ((y_clf_test == 'F') & (y_pred_dt == 'F')).sum()
+
+print(f"\n=== IMPACTO DE NEGÓCIO - Árvore de Decisão ===")
+print(f"Alunos com classe 'F' no teste: {alunos_F_reais}")
+print(f"Alunos com classe 'F' corretamente detetados: {alunos_F_detetados}")
+print(f"Não detetados: {alunos_F_reais - alunos_F_detetados}")
+print(f"Taxa de detecção de alunos 'F': {(alunos_F_detetados / alunos_F_reais * 100):.2f}%")
+print(f"\nCritério de sucesso: Recall F ≥ 80%")
+print(f"Resultado: {'ATINGIDO' if alunos_F_detetados/alunos_F_reais >= 0.8 else 'NÃO ATINGIDO'}")
+
+
+aluno_risco = X_clf_test.iloc[0:1]
+predicao = dt.predict(aluno_risco)[0]
+proba = dt.predict_proba(aluno_risco)[0]
+classes_ord = dt.classes_
+
+print("\n=== EduData AcademicAlert ===")
+print(f"Classe prevista: {predicao}")
+idx_F=list(classes_ord).index('F')
+print(f"Probabilidade de ser 'F': {proba[idx_F]*100:.2f}%")
+
+if predicao == 'F':
+    print("ALERTA VERMELHO: Aluno em risco de reprovação! Acionar sistema AcademicAlert para intervenção imediata.")
+elif predicao == 'E':
+    print("ALERTA LARANJA: Aluno com risco moderado! Monitorizar de perto e considerar ações de apoio.")
+elif predicao == 'D':
+    print("ALERTA AMARELO: Aluno com risco baixo! Manter acompanhamento regular.")
+else:
+    print("ALERTA VERDE: Aluno com bom desempenho! Continuar a incentivar e apoiar seu progresso acadêmico.")
+
 
 # ============================
 # CLUSTERING
@@ -716,6 +753,23 @@ df_clust['exam_score']=df_regressao['exam_score']
 print("\n=== PERFIL MÉDIO POR CLUSTER ===")
 perfil = df_clust.groupby('cluster')[['study_hours','class_attendance','sleep_hours','exam_score']].mean().round(3)
 print(perfil)
+
+
+nomes_perfis = {
+    0: "Alunos de Alto Rendimento",
+    1: "Alunos de Desempenho Moderado",
+    2: "Em Atenção",
+    3: "Alunos em Risco de Reprovar"
+}
+
+df_clust['perfil'] = df_clust['cluster'].map(nomes_perfis)
+print("\n Distribuição de perfis:")
+distribuicao_perfis = df_clust['perfil'].value_counts().to_dict()
+for perfil, count in distribuicao_perfis.items():
+    pct = (count / len(df_clust)) * 100
+    print(f"{perfil}: {count:,} alunos ({pct:.1f}%)")
+
+
 
 with open('modelo_dt.pkl', 'wb') as f:
     pickle.dump(dt, f)
