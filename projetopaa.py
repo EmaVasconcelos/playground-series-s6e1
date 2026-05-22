@@ -178,7 +178,7 @@ else:
     print("\nValores em falta encontrados. Será aplicada imputação.")
     # Para varivaeis numéricas, usar a mediana para imputação
     num_cols = df.select_dtypes(include=['number']).columns
-    for col in cols:
+    for col in nupm_cols:
         if df[col].isnull().sum() > 0:
             mediana = df[col].median()
             df[col].fillna(mediana, inplace=True)
@@ -520,6 +520,22 @@ xgb_clf= XGBClassifier(
 xgb_clf.fit(X_clf_train_bal,y_clf_train_enc)
 print('XGBoost treinado.')
 
+#Ajuste dos hiperparametros
+print('grid search-Random Forest')
+param_grid={
+    'n_estimators':[100,200],
+    'max_depth':[10,15,20],
+    'min_samples_leaf':[20,50]
+}
+
+grid_rf= GridSearchCV(
+    RandomForestClassifier(class_weight='balanced',random_state=SEED,n_jobs=1),param_grid,cv=3,scoring='f1_macro',n_jobs=-1,verbose=1
+)
+grid_rf.fit(X_clf_train_bal,y_clf_train_bal)
+print(f"Melhores parametros: {grid_rf.best_params_}")
+print(f"Melhores F1-macro: {grid_rf.best_score_:.4f}")
+
+rf_clf_otimizado=grid_rf.best_estimator_
 
 # =============================
 # CROSS‑VALIDATION (5‑Fold)
@@ -579,23 +595,6 @@ for modelo, nome, y_train in modelos_cv_xgb:
         'Recall CV (std)':   round(scores_rec.std(), 4),
     })
 
-#Ajuste dos hiperparametros
-print('grid search-Random Forest')
-param_grid={
-    'n_estimators':[100,200],
-    'max_depth':[10,15,20],
-    'min_samples_leaf':[20,50]
-}
-
-
-grid_rf= GridSearchCV(
-    RandomForestClassifier(class_weight='balanced',random_state=SEED,n_jobs=1),param_grid,cv=3,scoring='f1_macro',n_jobs=-1,verbose=1
-)
-grid_rf.fit(X_clf_train_bal,y_clf_train_bal)
-print(f"Melhores parametros: {grid_rf.best_params_}")
-print(f"Melhores F1-macro: {grid_rf.best_score_:.4f}")
-
-rf_clf_otimizado=grid_rf.best_estimator_
 
 # =============================
 # AVALIACAO
@@ -628,7 +627,7 @@ def avaliar_classificacao(modelo, X_test,y_test, nome, encoded= False):
 resultados_clf=[]
 for modelo, nome, enc in[
     (dt, 'Árvore de Decisão', False),
-    (rf_clf, 'Random Forest', False),
+    (rf_clf_otimizado, 'Random Forest (Otimizado)', False),
     (xgb_clf, 'XGBoost', True)
 ]:
     resultados_clf.append(avaliar_classificacao(modelo, X_clf_test, y_clf_test, nome, encoded=enc))
