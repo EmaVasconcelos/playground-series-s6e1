@@ -520,6 +520,65 @@ xgb_clf= XGBClassifier(
 xgb_clf.fit(X_clf_train_bal,y_clf_train_enc)
 print('XGBoost treinado.')
 
+
+# =============================
+# CROSS‑VALIDATION (5‑Fold)
+# =============================
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
+
+print("\n=== CROSS‑VALIDATION (5‑Fold) — CLASSIFICAÇÃO ===")
+
+modelos_cv = [
+    (dt, 'Árvore de Decisão', y_clf_train_bal),
+    (rf_clf_otimizado, 'Random Forest', y_clf_train_bal),
+]
+
+# XGBoost precisa das classes codificadas
+modelos_cv_xgb = [
+    (xgb_clf, 'XGBoost', y_clf_train_enc)
+]
+
+resultados_cv = []
+
+for modelo, nome, y_train in modelos_cv:
+    scores_f1  = cross_val_score(modelo, X_clf_train_bal, y_train,
+                                 cv=skf, scoring='f1_macro', n_jobs=-1)
+    scores_rec = cross_val_score(modelo, X_clf_train_bal, y_train,
+                                 cv=skf, scoring='recall_macro', n_jobs=-1)
+
+    print(f"\n{nome}:")
+    print(f"  F1‑macro      — Média: {scores_f1.mean():.4f} | Desvio: {scores_f1.std():.4f}")
+    print(f"  Recall‑macro  — Média: {scores_rec.mean():.4f} | Desvio: {scores_rec.std():.4f}")
+
+    resultados_cv.append({
+        'Modelo': nome,
+        'F1 CV (média)': round(scores_f1.mean(), 4),
+        'F1 CV (std)':   round(scores_f1.std(), 4),
+        'Recall CV (média)': round(scores_rec.mean(), 4),
+        'Recall CV (std)':   round(scores_rec.std(), 4),
+    })
+
+# XGBoost separado
+for modelo, nome, y_train in modelos_cv_xgb:
+    scores_f1 = cross_val_score(modelo, X_clf_train_bal, y_train,
+                                cv=skf, scoring='f1_macro', n_jobs=-1)
+    scores_rec = cross_val_score(modelo, X_clf_train_bal, y_train,
+                                 cv=skf, scoring='recall_macro', n_jobs=-1)
+
+    print(f"\n{nome}:")
+    print(f"  F1‑macro      — Média: {scores_f1.mean():.4f} | Desvio: {scores_f1.std():.4f}")
+    print(f"  Recall‑macro  — Média: {scores_rec.mean():.4f} | Desvio: {scores_rec.std():.4f}")
+
+    resultados_cv.append({
+        'Modelo': nome,
+        'F1 CV (média)': round(scores_f1.mean(), 4),
+        'F1 CV (std)':   round(scores_f1.std(), 4),
+        'Recall CV (média)': round(scores_rec.mean(), 4),
+        'Recall CV (std)':   round(scores_rec.std(), 4),
+    })
+
 #Ajuste dos hiperparametros
 print('grid search-Random Forest')
 param_grid={
@@ -813,6 +872,39 @@ xgb_reg = XGBRegressor(
     n_jobs=-1
 )
 xgb_reg.fit(X_reg_train, y_reg_train)
+
+# =============================
+# CROSS‑VALIDATION — REGRESSÃO (5‑Fold)
+# =============================
+from sklearn.model_selection import cross_val_score, KFold
+
+print("\n=== CROSS‑VALIDATION (5‑Fold) — REGRESSÃO ===")
+
+modelos_reg = [
+    (lr, "Regressão Linear"),
+    (rf_reg, "Random Forest Regressor"),
+    (xgb_reg, "XGBoost Regressor")
+]
+
+resultados_cv_reg = []
+
+for modelo, nome in modelos_reg:
+    scores_r2 = cross_val_score(modelo, X_reg_train, y_reg_train,
+                                cv=kf, scoring='r2', n_jobs=-1)
+    scores_mae = cross_val_score(modelo, X_reg_train, y_reg_train,
+                                 cv=kf, scoring='neg_mean_absolute_error', n_jobs=-1)
+
+    print(f"\n{nome}:")
+    print(f"  R² médio: {scores_r2.mean():.4f} | Desvio: {scores_r2.std():.4f}")
+    print(f"  MAE médio: {-scores_mae.mean():.4f} | Desvio: {scores_mae.std():.4f}")
+
+    resultados_cv_reg.append({
+        "Modelo": nome,
+        "R2 CV (média)": round(scores_r2.mean(), 4),
+        "R2 CV (std)": round(scores_r2.std(), 4),
+        "MAE CV (média)": round(-scores_mae.mean(), 4),
+        "MAE CV (std)": round(scores_mae.std(), 4)
+    })
 
 #============================
 # MÉTRICAS DE REGRESSÃO 
