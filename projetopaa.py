@@ -178,7 +178,7 @@ else:
     print("\nValores em falta encontrados. Será aplicada imputação.")
     # Para varivaeis numéricas, usar a mediana para imputação
     num_cols = df.select_dtypes(include=['number']).columns
-    for col in nupm_cols:
+    for col in num_cols:
         if df[col].isnull().sum() > 0:
             mediana = df[col].median()
             df[col].fillna(mediana, inplace=True)
@@ -517,7 +517,7 @@ xgb_clf= XGBClassifier(
     random_state=SEED,
     n_jobs=1
 )
-xgb_clf.fit(X_clf_train_bal,y_clf_train_enc)
+xgb_clf.fit(X_clf_train_bal, y_clf_train_bal)
 print('XGBoost treinado.')
 
 #Ajuste dos hiperparametros
@@ -553,7 +553,7 @@ modelos_cv = [
 
 # XGBoost precisa das classes codificadas
 modelos_cv_xgb = [
-    (xgb_clf, 'XGBoost', y_clf_train_enc)
+    (xgb_clf, 'XGBoost', y_clf_train_bal)
 ]
 
 resultados_cv = []
@@ -628,7 +628,7 @@ resultados_clf=[]
 for modelo, nome, enc in[
     (dt, 'Árvore de Decisão', False),
     (rf_clf_otimizado, 'Random Forest (Otimizado)', False),
-    (xgb_clf, 'XGBoost', True)
+    (xgb_clf, 'XGBoost', False)
 ]:
     resultados_clf.append(avaliar_classificacao(modelo, X_clf_test, y_clf_test, nome, encoded=enc))
 
@@ -645,8 +645,6 @@ melhor_nome = df_resultados_clf.iloc[0]['Modelo']
 melhor_clf= objetos_modelos[nomes_modelos.index(melhor_nome)]
 
 y_pred_melhor = melhor_clf.predict(X_clf_test)
-if melhor_nome == 'XGBoost':
-    y_pred_melhor = le.inverse_transform(y_pred_melhor)
 
 fig, ax = plt.subplots(figsize=(8,6))
 cm=confusion_matrix(y_clf_test, y_pred_melhor, 
