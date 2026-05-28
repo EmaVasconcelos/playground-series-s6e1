@@ -487,6 +487,7 @@ le=LabelEncoder()
 y_clf_train_enc = le.fit_transform(y_clf_train_bal)
 y_clf_test_enc = le.transform(y_clf_test)
 
+
 #arvores de decisao
 dt= DecisionTreeClassifier(
     max_depth=10,
@@ -517,8 +518,9 @@ xgb_clf= XGBClassifier(
     random_state=SEED,
     n_jobs=1
 )
-xgb_clf.fit(X_clf_train_bal, y_clf_train_bal)
+xgb_clf.fit(X_clf_train_bal, y_clf_train_enc)
 print('XGBoost treinado.')
+
 
 #Ajuste dos hiperparametros
 print('grid search-Random Forest')
@@ -540,61 +542,90 @@ rf_clf_otimizado=grid_rf.best_estimator_
 # =============================
 # CROSS‑VALIDATION (5‑Fold)
 # =============================
+# Amostra para Grid Search e Cross-Validation
+SAMPLE = 50000
+idx_sample = np.random.RandomState(SEED).choice(len(X_clf_train_bal), SAMPLE, replace=False)
+X_sample = X_clf_train_bal.iloc[idx_sample]
+y_sample = y_clf_train_bal.iloc[idx_sample]
+y_sample_enc = y_clf_train_enc[idx_sample]
+
+#Ajuste dos hiperparametros
+print('grid search - Random Forest')
+param_grid = {
+    'n_estimators':     [100, 200],
+    'max_depth':        [10, 15, 20],
+    'min_samples_leaf': [20, 50]
+}
+
+grid_rf = GridSearchCV(
+    RandomForestClassifier(class_weight='balanced', random_state=SEED, n_jobs=1),
+    param_grid, cv=3, scoring='f1_macro', n_jobs=1, verbose=1
+)
+grid_rf.fit(X_sample, y_sample)  # usa amostra
+print(f"Melhores parametros: {grid_rf.best_params_}")
+print(f"Melhor F1-macro: {grid_rf.best_score_:.4f}")
+
+# Re-treinar no dataset completo com melhores parâmetros
+rf_clf_otimizado = RandomForestClassifier(
+    **grid_rf.best_params_,
+    class_weight='balanced',
+    random_state=SEED,
+    n_jobs=1
+)
+rf_clf_otimizado.fit(X_clf_train_bal, y_clf_train_bal)
+print("Random Forest re-treinado no dataset completo!")
+
+# =============================
+# CROSS-VALIDATION (5-Fold)
+# =============================
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 
 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
 
-print("\n=== CROSS‑VALIDATION (5‑Fold) — CLASSIFICAÇÃO ===")
-
-modelos_cv = [
-    (dt, 'Árvore de Decisão', y_clf_train_bal),
-    (rf_clf_otimizado, 'Random Forest', y_clf_train_bal),
-]
-
-# XGBoost precisa das classes codificadas
-modelos_cv_xgb = [
-    (xgb_clf, 'XGBoost', y_clf_train_bal)
-]
+print("\n=== CROSS-VALIDATION (5-Fold) — CLASSIFICACAO ===")
+print(f"(aplicado sobre amostra de {SAMPLE:,} registos por limitacoes de memoria)")
 
 resultados_cv = []
 
-for modelo, nome, y_train in modelos_cv:
-    scores_f1  = cross_val_score(modelo, X_clf_train_bal, y_train,
-                                 cv=skf, scoring='f1_macro', n_jobs=-1)
-    scores_rec = cross_val_score(modelo, X_clf_train_bal, y_train,
-                                 cv=skf, scoring='recall_macro', n_jobs=-1)
-
+# Arvore de Decisao e Random Forest
+for modelo, nome, y_train in [
+    (dt,               'Arvore de Decisao', y_sample),
+    (rf_clf_otimizado, 'Random Forest',     y_sample),
+]:
+    scores_f1  = cross_val_score(modelo, X_sample, y_train,
+                                 cv=skf, scoring='f1_macro', n_jobs=1)
+    scores_rec = cross_val_score(modelo, X_sample, y_train,
+                                 cv=skf, scoring='recall_macro', n_jobs=1)
     print(f"\n{nome}:")
-    print(f"  F1‑macro      — Média: {scores_f1.mean():.4f} | Desvio: {scores_f1.std():.4f}")
-    print(f"  Recall‑macro  — Média: {scores_rec.mean():.4f} | Desvio: {scores_rec.std():.4f}")
-
+    print(f"  F1-macro     — Media: {scores_f1.mean():.4f} | Desvio: {scores_f1.std():.4f}")
+    print(f"  Recall-macro — Media: {scores_rec.mean():.4f} | Desvio: {scores_rec.std():.4f}")
     resultados_cv.append({
         'Modelo': nome,
-        'F1 CV (média)': round(scores_f1.mean(), 4),
-        'F1 CV (std)':   round(scores_f1.std(), 4),
-        'Recall CV (média)': round(scores_rec.mean(), 4),
+        'F1 CV (media)':     round(scores_f1.mean(), 4),
+        'F1 CV (std)':       round(scores_f1.std(), 4),
+        'Recall CV (media)': round(scores_rec.mean(), 4),
         'Recall CV (std)':   round(scores_rec.std(), 4),
     })
 
-# XGBoost separado
-for modelo, nome, y_train in modelos_cv_xgb:
-    scores_f1 = cross_val_score(modelo, X_clf_train_bal, y_train,
-                                cv=skf, scoring='f1_macro', n_jobs=-1)
-    scores_rec = cross_val_score(modelo, X_clf_train_bal, y_train,
-                                 cv=skf, scoring='recall_macro', n_jobs=-1)
+# XGBoost com labels encoded
+scores_f1  = cross_val_score(xgb_clf, X_sample, y_sample_enc,
+                             cv=skf, scoring='f1_macro', n_jobs=1)
+scores_rec = cross_val_score(xgb_clf, X_sample, y_sample_enc,
+                             cv=skf, scoring='recall_macro', n_jobs=1)
+print(f"\nXGBoost:")
+print(f"  F1-macro     — Media: {scores_f1.mean():.4f} | Desvio: {scores_f1.std():.4f}")
+print(f"  Recall-macro — Media: {scores_rec.mean():.4f} | Desvio: {scores_rec.std():.4f}")
+resultados_cv.append({
+    'Modelo': 'XGBoost',
+    'F1 CV (media)':     round(scores_f1.mean(), 4),
+    'F1 CV (std)':       round(scores_f1.std(), 4),
+    'Recall CV (media)': round(scores_rec.mean(), 4),
+    'Recall CV (std)':   round(scores_rec.std(), 4),
+})
 
-    print(f"\n{nome}:")
-    print(f"  F1‑macro      — Média: {scores_f1.mean():.4f} | Desvio: {scores_f1.std():.4f}")
-    print(f"  Recall‑macro  — Média: {scores_rec.mean():.4f} | Desvio: {scores_rec.std():.4f}")
-
-    resultados_cv.append({
-        'Modelo': nome,
-        'F1 CV (média)': round(scores_f1.mean(), 4),
-        'F1 CV (std)':   round(scores_f1.std(), 4),
-        'Recall CV (média)': round(scores_rec.mean(), 4),
-        'Recall CV (std)':   round(scores_rec.std(), 4),
-    })
-
+df_cv = pd.DataFrame(resultados_cv)
+print("\n=== TABELA CROSS-VALIDATION ===")
+print(df_cv.to_string(index=False))
 
 # =============================
 # AVALIACAO
@@ -628,7 +659,7 @@ resultados_clf=[]
 for modelo, nome, enc in[
     (dt, 'Árvore de Decisão', False),
     (rf_clf_otimizado, 'Random Forest (Otimizado)', False),
-    (xgb_clf, 'XGBoost', False)
+    (xgb_clf, 'XGBoost', True)
 ]:
     resultados_clf.append(avaliar_classificacao(modelo, X_clf_test, y_clf_test, nome, encoded=enc))
 
@@ -639,7 +670,7 @@ print(df_resultados_clf.to_string(index=False))
 print(f"\n Melhor modelo: {df_resultados_clf.iloc[0]['Modelo']}")
 
 #matriz de confusão do melhor modelo
-nomes_modelos = ['Árvore de Decisão', 'Random Forest', 'XGBoost']
+nomes_modelos = ['Árvore de Decisão', 'Random Forest (Otimizado)', 'XGBoost']
 objetos_modelos= [dt,rf_clf_otimizado,xgb_clf]
 melhor_nome = df_resultados_clf.iloc[0]['Modelo']
 melhor_clf= objetos_modelos[nomes_modelos.index(melhor_nome)]
@@ -655,6 +686,29 @@ ax.set_xlabel('Classe Prevista')
 ax.set_ylabel('Classe Real')
 plt.tight_layout()
 plt.savefig('confusion_matrix.png', bbox_inches='tight', dpi=150)
+plt.show()
+
+
+# ============================
+# FEATURE IMPORTANCE
+# ============================
+
+feat_names = X_clf_train_bal.columns.tolist()
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+importances_rf = pd.Series(rf_clf_otimizado.feature_importances_, index=feat_names)
+importances_rf.sort_values().tail(10).plot(kind='barh', ax=axes[0], color='#2E75B6')
+axes[0].set_title('Top 10 Features — Random Forest', fontweight='bold')
+axes[0].set_xlabel('Importancia')
+
+importances_xgb = pd.Series(xgb_clf.feature_importances_, index=feat_names)
+importances_xgb.sort_values().tail(10).plot(kind='barh', ax=axes[1], color='#70AD47')
+axes[1].set_title('Top 10 Features — XGBoost', fontweight='bold')
+axes[1].set_xlabel('Importancia')
+
+plt.tight_layout()
+plt.savefig('feature_importance.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 
@@ -837,6 +891,38 @@ with open('modelo_kmeans.pkl', 'wb') as f:
     pickle.dump(kmeans, f)
 with open('label_encoder.pkl', 'wb') as f:
     pickle.dump(le, f)
+
+# ============================
+# CONCLUSAO CLUSTERING
+# ============================
+
+print("\n=== DISTRIBUICAO DE ALUNOS POR PERFIL SMARTALERT ===")
+for perfil, count in distribuicao_perfis.items():
+    pct = (count / len(df_clust)) * 100
+    print(f"  {perfil}: {count:,} alunos ({pct:.1f}%)")
+
+# Grafico de barras dos perfis
+fig, ax = plt.subplots(figsize=(9, 5))
+cores_perfis = ['#70AD47', '#2E75B6', '#ED7D31', '#C00000']
+perfis_lista = list(distribuicao_perfis.keys())
+counts_lista = list(distribuicao_perfis.values())
+
+bars = ax.bar(perfis_lista, counts_lista, color=cores_perfis, edgecolor='white', width=0.6)
+for bar, val in zip(bars, counts_lista):
+    pct = val / len(df_clust) * 100
+    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 2000,
+            f'{val:,}\n({pct:.1f}%)', ha='center', va='bottom',
+            fontsize=10, fontweight='bold')
+
+ax.set_title('Distribuicao de Alunos por Perfil SmartAlert', fontsize=14, fontweight='bold')
+ax.set_xlabel('Perfil')
+ax.set_ylabel('Numero de Alunos')
+ax.tick_params(axis='x', rotation=15)
+sns.despine()
+plt.tight_layout()
+plt.savefig('distribuicao_perfis.png', dpi=150, bbox_inches='tight')
+plt.show()
+
 
 #============================  
 # Regressão Linear 
@@ -1038,3 +1124,33 @@ modelos_params = {
 }
 for nome, params in modelos_params.items():
     print(f"\n{nome}: {params}")
+
+# ============================
+# CONCLUSAO GERAL
+# ============================
+
+print("\n" + "="*60)
+print("  CONCLUSAO GERAL DO PROJETO")
+print("="*60)
+
+print("\n--- CLASSIFICACAO ---")
+print(df_resultados_clf.to_string(index=False))
+print(f"\nModelo recomendado para detetar alunos em risco: "
+      f"{df_resultados_clf.iloc[0]['Modelo']} "
+      f"(Recall F = {df_resultados_clf.iloc[0]['Recall_F']:.4f})")
+
+print("\n--- CLUSTERING ---")
+print(f"Metodo escolhido: K-Means com k=4")
+print(f"Silhouette Score: {clusters_kmeans:.4f}")
+print("\nDistribuicao final de alunos por perfil SmartAlert:")
+for perfil, count in df_clust['perfil'].value_counts().items():
+    pct = count / len(df_clust) * 100
+    print(f"  {perfil}: {count:,} alunos ({pct:.1f}%)")
+
+print("\n--- CRITERIOS DE SUCESSO ---")
+recall_f_dt = df_resultados_clf[
+    df_resultados_clf['Modelo'] == 'Árvore de Decisão'
+]['Recall_F'].values[0]
+print(f"Recall F >= 80%: {'ATINGIDO' if recall_f_dt >= 0.8 else 'NAO ATINGIDO'} ({recall_f_dt:.1%})")
+print(f"Silhouette Score >= 0.40: NAO ATINGIDO ({clusters_kmeans:.4f}) — comum em dados comportamentais continuos")
+print(f"4 perfis interpretaveis pelo SmartAlert: ATINGIDO")
