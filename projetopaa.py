@@ -1141,16 +1141,16 @@ print(f"\nModelo recomendado para detetar alunos em risco: "
 
 print("\n--- CLUSTERING ---")
 print(f"Metodo escolhido: K-Means com k=4")
-print(f"Silhouette Score: {clusters_kmeans:.4f}")
+print(f"Silhouette Score: {sil_kmeans:.4f}")
 print("\nDistribuicao final de alunos por perfil SmartAlert:")
-for perfil, count in df_clust['perfil'].value_counts().items():
-    pct = count / len(df_clust) * 100
-    print(f"  {perfil}: {count:,} alunos ({pct:.1f}%)")
+for cluster, count in pd.Series(clusters_kmeans).value_counts().sort_index().items():
+    pct = count / len(clusters_kmeans) * 100
+    print(f"  Cluster {cluster}: {count:,} alunos ({pct:.1f}%)")
 
 print("\n--- CRITERIOS DE SUCESSO ---")
 recall_f_dt = df_resultados_clf[
     df_resultados_clf['Modelo'] == 'Árvore de Decisão'
 ]['Recall_F'].values[0]
 print(f"Recall F >= 80%: {'ATINGIDO' if recall_f_dt >= 0.8 else 'NAO ATINGIDO'} ({recall_f_dt:.1%})")
-print(f"Silhouette Score >= 0.40: NAO ATINGIDO ({clusters_kmeans:.4f}) — comum em dados comportamentais continuos")
+print(f"Silhouette Score >= 0.40: {'ATINGIDO' if sil_kmeans >= 0.40 else 'NAO ATINGIDO'} ({sil_kmeans:.4f})")
 print(f"4 perfis interpretaveis pelo SmartAlert: ATINGIDO")
