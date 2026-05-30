@@ -949,7 +949,7 @@ with open('label_encoder.pkl', 'wb') as f:
 # CONCLUSAO CLUSTERING
 # ============================
 
-print("\n=== DISTRIBUICAO DE ALUNOS POR PERFIL SMARTALERT ===")
+print("\n=== DISTRIBUICAO DE ALUNOS POR PERFIL ACADEMICALERT ===")
 for perfil, count in distribuicao_perfis.items():
     pct = (count / len(df_clust)) * 100
     print(f"  {perfil}: {count:,} alunos ({pct:.1f}%)")
@@ -967,7 +967,7 @@ for bar, val in zip(bars, counts_lista):
             f'{val:,}\n({pct:.1f}%)', ha='center', va='bottom',
             fontsize=10, fontweight='bold')
 
-ax.set_title('Distribuicao de Alunos por Perfil SmartAlert', fontsize=14, fontweight='bold')
+ax.set_title('Distribuicao de Alunos por Perfil AcademicAlert', fontsize=14, fontweight='bold')
 ax.set_xlabel('Perfil')
 ax.set_ylabel('Numero de Alunos')
 ax.tick_params(axis='x', rotation=15)
